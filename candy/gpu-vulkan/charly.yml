@@ -1,0 +1,70 @@
+# gpu-vulkan — the virtual-GPU userspace for a krun lease.
+#
+# Sources: CONTAINERD-IMAGES.md §2 (`pod-crabbox-gpu`) and CONTAINERD.md §14.3,
+# which name `vulkan-virtio` and `vulkan-swrast` as separate packages because
+# mesa no longer ships Vulkan ICDs.
+gpu-vulkan:
+    candy:
+        description: |
+            The virtual-GPU userspace: mesa, the Venus Vulkan ICD
+            (`vulkan-virtio`), the software fallback ICD (`vulkan-swrast`), and
+            `vulkan-tools` for the consumer's `vulkaninfo` probe. There is no NVIDIA
+            userspace here — on krun the host's Vulkan loader runs in the render
+            server, and on crun/runc the NVIDIA userspace is injected by CDI. The
+            amdgpu-virtio mesa build for DRM native context is not a named package
+            in the Arch/CachyOS repos and is deliberately not claimed.
+        distro:
+            arch:
+                package:
+                    - mesa
+                    - vulkan-icd-loader
+                    - vulkan-virtio
+                    - vulkan-swrast
+                    - vulkan-tools
+        # The lease SSH port is the base image's own contract. An OCI base does not
+        # carry its candy chain's ports across the boundary, so the published number
+        # is restated here (one number, taken from the base image's label).
+        port:
+            - 2222
+
+        plan:
+            - check: the Venus (virtio) Vulkan ICD is installed
+              id: gpu-vulkan-virtio-icd
+              file:
+                  file: /usr/share/vulkan/icd.d/virtio_icd.json
+                  exists: true
+            - check: the software fallback Vulkan ICD is installed
+              id: gpu-vulkan-swrast-icd
+              exit_status: 0
+              command: >-
+                  pacman -Q vulkan-swrast
+            - check: vulkaninfo is installed for the lease's GPU probe
+              id: gpu-vulkan-tools
+              exit_status: 0
+              command: >-
+                  test -x /usr/bin/vulkaninfo
+            - check: the Vulkan loader and mesa are present
+              id: gpu-vulkan-loader
+              exit_status: 0
+              command: >-
+                  pacman -Q vulkan-icd-loader mesa
+            # The base is a published OCI artifact, so its contract is probed here at
+            # THIS image's boundary — not re-implemented, and not assumed from the tag.
+            - check: the inherited lease SSH contract is present (sshd, bootstrap, readiness hook)
+              id: gpu-vulkan-lease-binaries
+              exit_status: 0
+              command: >-
+                  test -x /usr/sbin/sshd &&
+                  test -x /usr/local/libexec/crabbox/bootstrap.sh &&
+                  test -x /usr/local/libexec/crabbox/ready
+            - check: the inherited lease login user is crabbox at uid 1000
+              id: gpu-vulkan-lease-user
+              exit_status: 0
+              command: >-
+                  test "$(getent passwd 1000 | cut -d: -f1)" = crabbox
+            - check: the inherited SSH drop-in names port 2222 and sshd parses it
+              id: gpu-vulkan-lease-sshd
+              exit_status: 0
+              command: >-
+                  grep -qx 'Port 2222' /etc/ssh/sshd_config.d/99-crabbox.conf &&
+                  /usr/sbin/sshd -t
