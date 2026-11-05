@@ -1,0 +1,45 @@
+# pod-crabbox-gpu — the virtio-GPU (Venus) lease image for the Crabbox
+# containerd provider.
+#
+# One repo per image (W5.2). The image imports the base lease image at a PINNED
+# tag, so the image tag and the git tag name the same build:
+# ghcr.io/opencharly/pod-crabbox-gpu:<tag> is the tree tagged <tag>.
+repo: github.com/opencharly/pod-crabbox-gpu
+defaults:
+    platform:
+        - linux/amd64
+    tag: auto
+    registry: ghcr.io/opencharly
+    build:
+        - pac
+import: []
+discover:
+    - path: candy
+      recursive: true
+
+pod-crabbox-gpu:
+    candy:
+        description: |
+            The GPU lease image for a Crabbox `containerd` lease, for the VIRTUAL GPU
+            path: mesa with the Venus Vulkan ICD (`vulkan-virtio`), the software
+            fallback ICD (`vulkan-swrast`), and `vulkan-tools`. Under krun the venus
+            driver renders on the host's Vulkan stack through the render server; NO
+            NVIDIA userspace is shipped, because it runs in the render server. Under
+            crun/runc the image ships no driver at all — the NVIDIA userspace arrives
+            by CDI injection from the host, which is the documented split for this
+            row. The amdgpu-virtio mesa variant for DRM native context is NOT
+            available as a named package in the CachyOS/Arch repos and is not claimed
+            here; see AGENTS.md, "What is unique here".
+        base: ghcr.io/opencharly/pod-crabbox:2026.307.1828
+        # An OCI base does not inherit the parent's distro/build values, so the
+        # CachyOS chain is declared here; the base image is itself CachyOS.
+        distro:
+            - cachyos
+            - arch
+        # PID 1 is the base image's `sshd -D`, which must run as root; the LOGIN
+        # user stays `crabbox` (uid 1000), created by the inherited candy.
+        user: root
+        uid: 0
+        gid: 0
+        candy:
+            - gpu-vulkan
